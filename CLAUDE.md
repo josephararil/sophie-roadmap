@@ -89,8 +89,8 @@ Both data files are intentionally self-contained and self-documenting so they ca
 - `ActionCard` — renders one item in `hero` (full body/lyrics/dialogue/prompts) or `compact` (tap-to-expand) variant; action row: Tried it / 👍 / 👎 / Next / Ask Gemini
 - `BottomTabBar` — two-segment fixed-bottom nav
 - `SettingsSheet` — DOB input, Gemini key, GitHub token + Gist ID, cloud sync buttons, reset preferences
-- `BrowseActions` — categorised list of all age-matched items; tap to open as hero card
-- `GeminiPromptModal` — direct browser → Gemini Flash API call; renders 3 AI-suggested result cards
+- `BrowseActions` — categorised list of all age-matched items (hardcoded + saved AI); tap to open as hero card; saved AI items shown with ✨ prefix
+- `GeminiPromptModal` — direct browser → Gemini Flash API call; optional free-text guidance textarea appended to prompt; renders 3 AI-suggested result cards each with a "Save to my activities" button
 
 **Selection algorithm** (in `components.jsx`, `pickCard` function):
 - Deterministic: same date + same state = same card (seeded RNG from `YYYY-MM-DD + dailyOffset + currentAge`)
@@ -99,6 +99,8 @@ Both data files are intentionally self-contained and self-documenting so they ca
 - Secondary cards: one item from each of the first 3 non-hero categories in declaration order
 
 Checked milestones are read directly from existing Roadmap localStorage keys (`sophie.milestones.*`) — no state hoisting needed.
+
+`ActionTab` merges `window.ACTIONS_DATA.items` with saved Gemini items from `sophie.gemini.saved` into `allItems`. The selection algorithm, secondary cards, and Browse view all operate on `allItems`, so saved AI suggestions surface naturally. Saved items carry `_geminiSaved: true` for the ✨ badge.
 
 ## localStorage Keys
 
@@ -114,6 +116,7 @@ Checked milestones are read directly from existing Roadmap localStorage keys (`s
 | `sophie.action.rating.<id>` | `1` \| `-1` | 👍 / 👎 rating |
 | `sophie.action.dailyOffset.<YYYY-MM-DD>` | number | "Next suggestion" counter per day |
 | `sophie.gemini.key` | string | User-provided Gemini API key — **never synced to cloud** |
+| `sophie.gemini.saved` | `ActionItem[]` | Gemini-generated activities saved by the user — synced |
 | `sophie.github.token` | string | GitHub personal access token (gist scope) — **never synced to cloud** |
 | `sophie.github.gistId` | string | GitHub Gist ID for cloud sync — synced |
 
@@ -138,13 +141,13 @@ Checked milestones are read directly from existing Roadmap localStorage keys (`s
 
 - **Pre-cached on install:** all local files (`index.html`, `app.jsx`, `components.jsx`, `data.js`, `actions.js`, `manifest.json`, `icon.svg`, all `assets/*.png`)
 - **Lazily cached on first fetch:** CDN scripts (React, Babel) and Google Fonts
-- **Cache version:** `CACHE_VERSION = 'v4'` at the top of `sw.js`
+- **Cache version:** `CACHE_VERSION = 'v5'` at the top of `sw.js`
 
 **When to bump the cache version:** Any time you update `data.js`, `actions.js`, `app.jsx`, `components.jsx`, or any asset file, increment `CACHE_VERSION` in `sw.js`. This forces the service worker to activate a new cache and delete the old one.
 
 ```js
 // sw.js, line 1
-const CACHE_VERSION = 'v4';  // bump on every content update
+const CACHE_VERSION = 'v5';  // bump on every content update
 ```
 
 ## Styling
@@ -158,8 +161,9 @@ The Action tab supports optional AI-generated activity suggestions via the Gemin
 - Key is stored in localStorage under `sophie.gemini.key` and **never leaves the device** (excluded from cloud sync).
 - API call uses `POST https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent` with the key in the `X-goog-api-key` header (not a query param).
 - If no key is set, the "Ask Gemini" button opens the Settings sheet instead.
-- All Gemini results are ephemeral — never persisted to `ACTIONS_DATA`.
 - The key is shown in plain text in settings (personal-only app, never used in production).
+- `GeminiPromptModal` shows an optional free-text textarea; its content is appended to the prompt as "Additional guidance from the parent: …" if non-empty.
+- Each result card has a "Save to my activities" button. Saved items are stored in `sophie.gemini.saved` (JSON array) and merged into `allItems` in `ActionTab` at load time. They inherit the parent item's `category`, `ages: [currentAge]`, `literacyWeight: 0.5`, and carry `_geminiSaved: true`. They are included in cloud sync (not in `SYNC_EXCLUDE`).
 
 ## Cloud Sync (GitHub Gist)
 

@@ -631,16 +631,23 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
   const actionsData = window.ACTIONS_DATA || { items: [], categories: [] };
   const items = actionsData.items;
   const categories = actionsData.categories;
+  const [savedGeminiItems, setSavedGeminiItems] = useState(() => {
+    try {
+      const raw = localStorage.getItem('sophie.gemini.saved');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const allItems = [...items, ...savedGeminiItems];
   const checkedMilestones = getCheckedMilestoneTexts();
   const seedStr = today + String(dailyOffset);
 
-  const heroCard = pickCard(items, currentAge, checkedMilestones, ratingsMap, doneMap, seedStr);
+  const heroCard = pickCard(allItems, currentAge, checkedMilestones, ratingsMap, doneMap, seedStr);
 
   const secondaryCards = (() => {
     if (!heroCard) return [];
     const nonHeroCats = categories.filter(c => c.id !== heroCard.category).slice(0, 3);
     return nonHeroCats.map(cat => {
-      const catItems = items.filter(it => it.category === cat.id);
+      const catItems = allItems.filter(it => it.category === cat.id);
       return pickCard(catItems, currentAge, checkedMilestones, ratingsMap, doneMap, seedStr + cat.id, [heroCard.id]);
     }).filter(Boolean);
   })();
@@ -671,6 +678,14 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
     keys.forEach(k => localStorage.removeItem(k));
     setDoneMap({});
     setRatingsMap({});
+  }
+
+  function saveGeminiItem(newItem) {
+    try {
+      const updated = [...savedGeminiItems, newItem];
+      localStorage.setItem('sophie.gemini.saved', JSON.stringify(updated));
+      setSavedGeminiItems(updated);
+    } catch {}
   }
 
   const sharedCardProps = {
@@ -724,6 +739,7 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
         <BrowseActions
           currentAge={currentAge}
           categories={categories}
+          items={allItems}
           onClose={() => setShowBrowse(false)}
           {...sharedCardProps}
         />
@@ -732,6 +748,8 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
         <GeminiPromptModal
           item={geminiItem}
           categories={categories}
+          currentAge={currentAge}
+          onSaveGeminiItem={saveGeminiItem}
           onClose={() => setGeminiItem(null)}
           onOpenSettings={() => { setGeminiItem(null); setShowSettings(true); }}
         />
@@ -944,9 +962,9 @@ function SettingsSheet({ onClose, sophieDob, setSophieDob, onResetPreferences })
 
 // ─── BrowseActions ─────────────────────────────────────────────────────────
 
-function BrowseActions({ currentAge, categories, onClose, doneMap, ratingsMap, onTriedIt, onRate, onNext, onGemini }) {
+function BrowseActions({ currentAge, categories, items: propItems, onClose, doneMap, ratingsMap, onTriedIt, onRate, onNext, onGemini }) {
   const [selectedItem, setSelectedItem] = useState(null);
-  const items = (window.ACTIONS_DATA || { items: [] }).items;
+  const items = propItems || (window.ACTIONS_DATA || { items: [] }).items;
 
   const byCategory = categories.map(cat => ({
     cat,
@@ -1014,7 +1032,7 @@ function BrowseActions({ currentAge, categories, onClose, doneMap, ratingsMap, o
                 </div>
                 {catItems.map(it => (
                   <button key={it.id} className="browse__item" onClick={() => setSelectedItem(it)}>
-                    <div className="browse__item-title">{it.title}</div>
+                    <div className="browse__item-title">{it._geminiSaved && <span style={{ fontSize: '12px', marginRight: '4px' }}>✨</span>}{it.title}</div>
                     <div className="browse__item-hook">{it.hook}</div>
                   </button>
                 ))}
@@ -1029,7 +1047,7 @@ function BrowseActions({ currentAge, categories, onClose, doneMap, ratingsMap, o
 
 // ─── GeminiPromptModal ─────────────────────────────────────────────────────
 
-function GeminiPromptModal({ item, categories, onClose, onOpenSettings }) {
+function GeminiPromptModal({ item, categories, onClose, onOpenSettings, currentAge, onSaveGeminiItem }) {
   const geminiKey = (() => {
     try {
       const raw = localStorage.getItem('sophie.gemini.key');
@@ -1040,6 +1058,8 @@ function GeminiPromptModal({ item, categories, onClose, onOpenSettings }) {
   const [status, setStatus] = useState('idle');
   const [results, setResults] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
+  const [userContext, setUserContext] = useState('');
+  const [savedResultIds, setSavedResultIds] = useState(new Set());
 
   useEffect(() => {
     if (!geminiKey) onOpenSettings();
@@ -1051,7 +1071,8 @@ function GeminiPromptModal({ item, categories, onClose, onOpenSettings }) {
     setStatus('loading');
     setErrorMsg('');
     const cat = categories.find(c => c.id === item.category);
-    const prompt = `You are helping a parent of a bilingual 3.5-year-old (English + Bulgarian, Bulgarian-only schooling, English-dominant accent: RP). The parent just used this activity with their daughter:\n\nTitle: ${item.title}\nHook: ${item.hook}\nCategory: ${cat ? cat.label : item.category}\nSkill focus: ${(item.skillTags || []).join(', ')}\n\nSuggest 3 NEW activities in the same category that go deeper or vary the approach, all focused on advancing English fluency or literacy. Use British English spellings.\n\nRespond in JSON only:\n[\n  { "title": "...", "hook": "...", "body": "..." },\n  ...\n]`;
+    let prompt = `You are helping a parent of a bilingual 3.5-year-old (English + Bulgarian, Bulgarian-only schooling, English-dominant accent: RP). The parent just used this activity with their daughter:\n\nTitle: ${item.title}\nHook: ${item.hook}\nCategory: ${cat ? cat.label : item.category}\nSkill focus: ${(item.skillTags || []).join(', ')}\n\nSuggest 3 NEW activities in the same category that go deeper or vary the approach, all focused on advancing English fluency or literacy. Use British English spellings.\n\nRespond in JSON only:\n[\n  { "title": "...", "hook": "...", "body": "..." },\n  ...\n]`;
+    if (userContext.trim()) prompt += `\n\nAdditional guidance from the parent: ${userContext.trim()}`;
     try {
       const res = await fetch(
         'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent',
@@ -1076,6 +1097,25 @@ function GeminiPromptModal({ item, categories, onClose, onOpenSettings }) {
     }
   }
 
+  function handleSave(result, i) {
+    const newItem = {
+      id: `gemini-${Date.now()}-${i}`,
+      category: item.category,
+      ages: [currentAge],
+      title: result.title,
+      hook: result.hook || '',
+      body: result.body || '',
+      literacyWeight: 0.5,
+      milestoneRefs: [],
+      skillTags: [],
+      where: ['home'],
+      duration: '10–15 min',
+      _geminiSaved: true,
+    };
+    onSaveGeminiItem(newItem);
+    setSavedResultIds(prev => new Set([...prev, i]));
+  }
+
   return (
     <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label="Ask Gemini for more ideas">
       <div className="sheet-overlay__backdrop" onClick={onClose} />
@@ -1089,10 +1129,19 @@ function GeminiPromptModal({ item, categories, onClose, onOpenSettings }) {
           </button>
         </div>
         <div className="sheet__body">
-          <p className="gemini__context">Based on: <strong>{item.title}</strong></p>
+          <p className="gemini__context">Based on: <strong>{item.title}</strong> · Generate 3 ideas</p>
 
           {status === 'idle' && (
-            <button className="gemini__call-btn" onClick={callGemini}>Get 3 new ideas from Gemini</button>
+            <>
+              <textarea
+                className="sheet__input"
+                style={{ minHeight: '80px', resize: 'vertical', marginBottom: '12px' }}
+                value={userContext}
+                onChange={e => setUserContext(e.target.value)}
+                placeholder={'Add optional guidance (e.g. "focus on rhyming", "use Bulgarian words too")…'}
+              />
+              <button className="gemini__call-btn" onClick={callGemini}>Generate 3 ideas</button>
+            </>
           )}
           {status === 'loading' && <div className="gemini__loading">Thinking…</div>}
           {status === 'error' && (
@@ -1109,6 +1158,14 @@ function GeminiPromptModal({ item, categories, onClose, onOpenSettings }) {
                   <div className="gemini__result-title">{r.title}</div>
                   {r.hook && <div className="gemini__result-hook">{r.hook}</div>}
                   {r.body && <div className="gemini__result-body">{r.body}</div>}
+                  <button
+                    className="sheet__sync-btn"
+                    style={{ marginTop: '10px', width: '100%' }}
+                    onClick={() => handleSave(r, i)}
+                    disabled={savedResultIds.has(i)}
+                  >
+                    {savedResultIds.has(i) ? 'Saved to my activities ✓' : 'Save to my activities'}
+                  </button>
                 </div>
               ))}
             </div>
