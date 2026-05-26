@@ -338,6 +338,10 @@ function getTodayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function daysSince(iso) {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+
 function calcAgeFromDob(dobStr) {
   const dob = new Date(dobStr);
   const now = new Date();
@@ -389,17 +393,18 @@ function weightedPick(pool, scores, rng) {
   return pool[pool.length - 1];
 }
 
-function pickCard(items, currentAge, checkedMilestones, ratings, seedStr, excludeIds = []) {
+function pickCard(items, currentAge, checkedMilestones, ratings, doneMap, seedStr, excludeIds = []) {
   const lc = checkedMilestones.map(m => m.toLowerCase());
 
   let pool = items.filter(it =>
     it.ages.includes(currentAge) &&
     !excludeIds.includes(it.id) &&
+    !(doneMap[it.id] && daysSince(doneMap[it.id]) < 14) &&
     ratings[it.id] !== -1
   );
   if (!pool.length) {
     pool = items.filter(it =>
-      it.ages.includes(currentAge) && !excludeIds.includes(it.id)
+      it.ages.includes(currentAge) && !excludeIds.includes(it.id) && ratings[it.id] !== -1
     );
   }
   if (!pool.length) return null;
@@ -435,6 +440,16 @@ function getCheckedMilestoneTexts() {
     } catch {}
   }
   return texts;
+}
+
+function readDoneMap() {
+  const map = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith('sophie.action.done.')) continue;
+    map[key.replace('sophie.action.done.', '')] = localStorage.getItem(key);
+  }
+  return map;
 }
 
 function readRatingsMap() {
@@ -608,6 +623,7 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
 
   const today = getTodayStr();
   const [dailyOffset, setDailyOffset] = useLocalStorageState(`sophie.action.dailyOffset.${today}`, 0);
+  const [doneMap, setDoneMap] = useState(readDoneMap);
   const [ratingsMap, setRatingsMap] = useState(readRatingsMap);
 
   const actionsData = window.ACTIONS_DATA || { items: [], categories: [] };
@@ -623,18 +639,21 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
   const checkedMilestones = getCheckedMilestoneTexts();
   const seedStr = today + String(dailyOffset);
 
-  const heroCard = pickCard(allItems, currentAge, checkedMilestones, ratingsMap, seedStr);
+  const heroCard = pickCard(allItems, currentAge, checkedMilestones, ratingsMap, doneMap, seedStr);
 
   const secondaryCards = (() => {
     if (!heroCard) return [];
     const nonHeroCats = categories.filter(c => c.id !== heroCard.category).slice(0, 3);
     return nonHeroCats.map(cat => {
       const catItems = allItems.filter(it => it.category === cat.id);
-      return pickCard(catItems, currentAge, checkedMilestones, ratingsMap, seedStr + cat.id, [heroCard.id]);
+      return pickCard(catItems, currentAge, checkedMilestones, ratingsMap, doneMap, seedStr + cat.id, [heroCard.id]);
     }).filter(Boolean);
   })();
 
-  function markTriedIt() {
+  function markTriedIt(id) {
+    const iso = new Date().toISOString();
+    try { localStorage.setItem(`sophie.action.done.${id}`, iso); } catch {}
+    setDoneMap(prev => ({ ...prev, [id]: iso }));
     setDailyOffset(o => o + 1);
   }
 
@@ -657,6 +676,7 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
       if (k && k.startsWith('sophie.action.')) keys.push(k);
     }
     keys.forEach(k => localStorage.removeItem(k));
+    setDoneMap({});
     setRatingsMap({});
   }
 
