@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repo.
 
 ## Project Overview
 
@@ -8,7 +8,7 @@ A static two-tab React PWA — a developmental roadmap guide and daily activity 
 
 ## Running the App
 
-There is no build step. Open `index.html` in a browser or serve it via any local HTTP server:
+There is no build step, everything is built by Github Pages/Actions, entirely for personal use. Open `index.html` in a browser or serve it via any local HTTP server:
 
 ```powershell
 # Python
