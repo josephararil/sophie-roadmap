@@ -5,27 +5,42 @@ function App() {
   const data = window.ROADMAP_DATA;
   const [idx, setIdx] = window.useLocalStorageState('sophie.currentAge', 0);
   const [welcomed, setWelcomed] = window.useLocalStorageState('sophie.welcomed', false);
+  const [activeTab, setActiveTab] = window.useLocalStorageState('sophie.activeTab', 'action');
   const safeIdx = Math.max(0, Math.min(idx, data.length - 1));
   const age = data[safeIdx];
 
-  // Scroll to top when changing age
   useEffectApp(() => {
-    const scroller = document.querySelector('.app-scroll');
-    if (scroller) scroller.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [safeIdx]);
+    if (activeTab === 'roadmap') {
+      const scroller = document.querySelector('.app-scroll');
+      if (scroller) scroller.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [safeIdx, activeTab]);
 
   return (
     <div className="app">
-      <TopBar
-        idx={safeIdx}
-        total={data.length}
-        onPrev={() => setIdx(Math.max(0, safeIdx - 1))}
-        onNext={() => setIdx(Math.min(data.length - 1, safeIdx + 1))}
-      />
-      <window.AgeTabs data={data} current={safeIdx} onChange={setIdx} />
+      {activeTab === 'roadmap' && (
+        <TopBar
+          idx={safeIdx}
+          total={data.length}
+          onPrev={() => setIdx(Math.max(0, safeIdx - 1))}
+          onNext={() => setIdx(Math.min(data.length - 1, safeIdx + 1))}
+        />
+      )}
+      {activeTab === 'roadmap' && (
+        <window.AgeTabs data={data} current={safeIdx} onChange={setIdx} />
+      )}
       <main className="app-scroll">
-        <window.AgeSection age={age} key={age.age} />
+        {activeTab === 'action' ? (
+          <window.ActionTab
+            currentAge={age.age}
+            currentAgeIdx={safeIdx}
+            setCurrentAgeIdx={setIdx}
+          />
+        ) : (
+          <window.AgeSection age={age} key={age.age} />
+        )}
       </main>
+      <window.BottomTabBar active={activeTab} onChange={setActiveTab} />
       {!welcomed && <WelcomeOverlay onClose={() => setWelcomed(true)} />}
     </div>
   );
@@ -72,12 +87,12 @@ function WelcomeOverlay({ onClose }) {
         <p className="welcome__sub">For Sophie, with love.</p>
         <div className="welcome__rule" aria-hidden="true"></div>
         <p className="welcome__body">
-          A practical, year-by-year guide from age <strong>2</strong> to <strong>11</strong>. Tap an age to explore the overview, weekly habits, monthly plans, and the milestones worth celebrating along the way.
+          A practical, year-by-year guide from age <strong>2</strong> to <strong>11</strong>. Use the <strong>Today</strong> tab for daily activity suggestions, and the <strong>Roadmap</strong> tab to explore milestones and monthly plans.
         </p>
         <ul className="welcome__list">
           <li>
-            <span className="welcome__list-icon" data-color="teal" aria-hidden="true">★</span>
-            Tick off the <strong>Weekly Habits</strong> you've started.
+            <span className="welcome__list-icon" data-color="teal" aria-hidden="true">⚡</span>
+            <strong>Today tab</strong> — one activity suggestion, every day.
           </li>
           <li>
             <span className="welcome__list-icon" data-color="teal" aria-hidden="true">✓</span>
