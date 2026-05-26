@@ -1,0 +1,24 @@
+{
+  "name": "A Developmental Roadmap — For Sophie",
+  "short_name": "Sophie's Roadmap",
+  "description": "A practical, year-by-year developmental roadmap for Sophie, ages 2–11.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBF9F4",
+  "theme_color": "#004D40",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/1.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

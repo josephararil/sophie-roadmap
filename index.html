@@ -7,6 +7,9 @@
 <meta name="theme-color" content="#004D40" />
 <meta name="description" content="A practical, year-by-year developmental roadmap for Sophie, ages 2–11." />
 
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon.svg" />
+
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,400;0,700;0,900;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -941,5 +944,15 @@ body::before {
 <script src="data.js"></script>
 <script type="text/babel" src="components.jsx"></script>
 <script type="text/babel" src="app.jsx"></script>
+
+<!-- Register service worker for PWA / offline support -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .catch(err => console.warn('Service worker registration failed:', err));
+    });
+  }
+</script>
 </body>
 </html>
