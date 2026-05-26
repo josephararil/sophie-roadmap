@@ -910,6 +910,83 @@ window.ACTIONS_DATA = {
     },
 
     {
+      id: 'conv-soup-memory',
+      category: 'conversation',
+      ages: [3, 4, 5],
+      title: '"Silly Soup"',
+      hook: "Let's make some silly soup! I'll stir the pot and put in a cat, and you put in a...",
+      body: "This rhyming game builds early literacy and phonological awareness, which are crucial for maintaining her British English pronunciation whilst she attends Bulgarian-only schooling. Pretend to stir a large, imaginary pot together. Introduce an item and encourage her to think of a rhyming word to toss into the soup (e.g., 'frog' and 'dog', 'mat' and 'hat'). If she gets stuck, offer clues using Received Pronunciation vowel sounds to help her match the rhyme. Take turns adding ingredients to keep the conversation flowing naturally.",
+      examples: [
+        'I went to the shops and I bought: banana, hat, teapot, cat, umbrella, sock, biscuit, kettle, balloon, spider',
+        'I went to the zoo and I saw: lion, elephant, snake, monkey, penguin, giraffe, kangaroo, hippo, zebra, tiger',
+        'In my suitcase I packed: pyjamas, toothbrush, jumper, sandals, sunglasses, book, swimming costume, hat',
+        'For breakfast I ate: porridge, banana, toast, eggs, yoghurt, blueberries, pancakes, jam, butter, marmalade',
+        'In my magic garden I grew: a strawberry, a giant pumpkin, a rainbow flower, a chocolate tree, a singing rose'
+      ],
+      duration: '5–10 min',
+      where: ['car', 'walking', 'mealtime', 'bedtime', 'anywhere'],
+      skillTags: ['vocabulary', 'english-conversation', 'english-maintenance', 'comprehension'],
+      milestoneRefs: [
+        'English vocabulary growth',
+        'English sentences of 4–5 words'
+      ],
+      literacyWeight: 1,
+      followUp: 'When she can manage chains of 6–7 items, add an alliteration constraint: "I went to the shops and I bought…" and every item must start with /b/. Vocabulary plus initial-sound filtering plus working memory — three skills in one round.',
+      relatedIds: ['conv-categories-game', 'game-memory-tray']
+    },
+    {
+      id: 'conv-parcel-memory',
+      category: 'conversation',
+      ages: [3, 4, 5],
+      title: "The Mystery Parcel",
+      hook: "I have a secret parcel in my hands. It's small, it's prickly, and it lives in the garden. What is it?",
+      body: "Varying the 'I Went to the Shops' memory list, this guessing game focuses on descriptive vocabulary and comprehension. Hide a household object behind your back, or simply imagine one. Describe its attributes—colour, texture, size, and function—using rich British English vocabulary (e.g., 'soft', 'enormous', 'bumpy'). Once she guesses the object, it is her turn to 'hide' an object and describe it to you. This develops her expressive language skills and encourages her to actively retrieve English words.",
+      examples: [
+        'I went to the shops and I bought: banana, hat, teapot, cat, umbrella, sock, biscuit, kettle, balloon, spider',
+        'I went to the zoo and I saw: lion, elephant, snake, monkey, penguin, giraffe, kangaroo, hippo, zebra, tiger',
+        'In my suitcase I packed: pyjamas, toothbrush, jumper, sandals, sunglasses, book, swimming costume, hat',
+        'For breakfast I ate: porridge, banana, toast, eggs, yoghurt, blueberries, pancakes, jam, butter, marmalade',
+        'In my magic garden I grew: a strawberry, a giant pumpkin, a rainbow flower, a chocolate tree, a singing rose'
+      ],
+      duration: '5–10 min',
+      where: ['car', 'walking', 'mealtime', 'bedtime', 'anywhere'],
+      skillTags: ['vocabulary', 'english-conversation', 'english-maintenance', 'comprehension'],
+      milestoneRefs: [
+        'English vocabulary growth',
+        'English sentences of 4–5 words'
+      ],
+      literacyWeight: 1,
+      followUp: 'When she can manage chains of 6–7 items, add an alliteration constraint: "I went to the shops and I bought…" and every item must start with /b/. Vocabulary plus initial-sound filtering plus working memory — three skills in one round.',
+      relatedIds: ['conv-categories-game', 'game-memory-tray']
+    },
+
+        {
+      id: 'conv-then-memory',
+      category: 'conversation',
+      ages: [3, 4, 5],
+      title: "And Then, Suddenly...",
+      hook: "A little squirrel put on his shiny red wellies and walked out of the garden. And then, suddenly...",
+      body: "Transition from vocabulary lists to narrative structure with this cooperative storytelling game. Start a simple story with a whimsical prompt, then pause and ask her to decide what happens next using the prompt: 'And then, suddenly...' Encourage her to use connectors like 'because', 'next', or 'but'. This activity advances her grammatical complexity and conversational fluency, ensuring her English remains creative and robust even while her school day is entirely in Bulgarian.",
+      examples: [
+        'I went to the shops and I bought: banana, hat, teapot, cat, umbrella, sock, biscuit, kettle, balloon, spider',
+        'I went to the zoo and I saw: lion, elephant, snake, monkey, penguin, giraffe, kangaroo, hippo, zebra, tiger',
+        'In my suitcase I packed: pyjamas, toothbrush, jumper, sandals, sunglasses, book, swimming costume, hat',
+        'For breakfast I ate: porridge, banana, toast, eggs, yoghurt, blueberries, pancakes, jam, butter, marmalade',
+        'In my magic garden I grew: a strawberry, a giant pumpkin, a rainbow flower, a chocolate tree, a singing rose'
+      ],
+      duration: '5–10 min',
+      where: ['car', 'walking', 'mealtime', 'bedtime', 'anywhere'],
+      skillTags: ['vocabulary', 'english-conversation', 'english-maintenance', 'comprehension'],
+      milestoneRefs: [
+        'English vocabulary growth',
+        'English sentences of 4–5 words'
+      ],
+      literacyWeight: 1,
+      followUp: 'When she can manage chains of 6–7 items, add an alliteration constraint: "I went to the shops and I bought…" and every item must start with /b/. Vocabulary plus initial-sound filtering plus working memory — three skills in one round.',
+      relatedIds: ['conv-categories-game', 'game-memory-tray']
+    },
+
+    {
       id: 'conv-story-questions',
       category: 'conversation',
       ages: [3, 4, 5],
