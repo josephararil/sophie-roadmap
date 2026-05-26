@@ -8,7 +8,7 @@
 // IMPORTANT: bump CACHE_VERSION whenever you update data.js, app.jsx,
 // components.jsx, or any asset, so users always get the latest content.
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `sophie-roadmap-${CACHE_VERSION}`;
 
 // All local files to pre-cache on first install.

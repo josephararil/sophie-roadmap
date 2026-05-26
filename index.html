@@ -1373,6 +1373,20 @@ body::before {
   font-family: var(--sans);
 }
 .sheet__reset-btn:hover { background: var(--light-red); }
+.sheet__sync-btn {
+  flex: 1;
+  padding: 11px 8px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(0,105,92,.3);
+  color: var(--teal);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background .15s ease;
+  min-height: 44px;
+  font-family: var(--sans);
+}
+.sheet__sync-btn:hover:not(:disabled) { background: var(--light-teal); }
+.sheet__sync-btn:disabled { opacity: .5; cursor: default; }
 
 /* =====================================================================
    BROWSE ACTIONS

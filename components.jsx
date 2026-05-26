@@ -342,6 +342,39 @@ function daysSince(iso) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 }
 
+function calcAgeFromDob(dobStr) {
+  const dob = new Date(dobStr);
+  const now = new Date();
+  let years = now.getFullYear() - dob.getFullYear();
+  let months = now.getMonth() - dob.getMonth();
+  let days = now.getDate() - dob.getDate();
+  if (days < 0) { months--; days += new Date(now.getFullYear(), now.getMonth(), 0).getDate(); }
+  if (months < 0) { years--; months += 12; }
+  return { years, months, days };
+}
+
+function buildGreeting(sophieDob, currentAge) {
+  const now = new Date();
+  const h = now.getHours();
+  const day = now.getDay();
+  const timeGreeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+
+  if (!sophieDob) return `${timeGreeting} — Sophie is ${currentAge} years old`;
+
+  const dob = new Date(sophieDob);
+  const isBirthday = dob.getMonth() === now.getMonth() && dob.getDate() === now.getDate();
+  const { years, months } = calcAgeFromDob(sophieDob);
+
+  if (isBirthday) return `Happy birthday — Sophie turns ${years} today`;
+
+  const specialDay = day === 5 ? 'Happy Friday' : day === 6 ? 'Happy Saturday' : day === 0 ? 'Happy Sunday' : null;
+  const prefix = specialDay || timeGreeting;
+  const ageStr = months > 0
+    ? `${years} years, ${months} month${months !== 1 ? 's' : ''} old`
+    : `${years} year${years !== 1 ? 's' : ''} old`;
+  return `${prefix} — Sophie is ${ageStr}`;
+}
+
 function stringHash(str) {
   let h = 5381;
   for (let i = 0; i < str.length; i++) h = (Math.imul(33, h) ^ str.charCodeAt(i)) >>> 0;
@@ -585,7 +618,7 @@ function ActionCard({ item, variant, categories, doneMap, ratingsMap, onTriedIt,
 
 // ─── ActionTab ─────────────────────────────────────────────────────────────
 
-function ActionTab({ currentAge, currentAgeIdx, setCurrentAgeIdx }) {
+function ActionTab({ currentAge, sophieDob, setSophieDob }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showBrowse, setShowBrowse] = useState(false);
   const [geminiItem, setGeminiItem] = useState(null);
@@ -640,9 +673,6 @@ function ActionTab({ currentAge, currentAgeIdx, setCurrentAgeIdx }) {
     setRatingsMap({});
   }
 
-  const h = new Date().getHours();
-  const greeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-
   const sharedCardProps = {
     categories,
     doneMap,
@@ -656,7 +686,7 @@ function ActionTab({ currentAge, currentAgeIdx, setCurrentAgeIdx }) {
   return (
     <div className="at">
       <div className="at__greeting">
-        <span className="at__greeting-text">{greeting}. Sophie is {currentAge} years old.</span>
+        <span className="at__greeting-text">{buildGreeting(sophieDob, currentAge)}</span>
         <button className="iconbtn" onClick={() => setShowSettings(true)} aria-label="Settings">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3" />
@@ -685,8 +715,8 @@ function ActionTab({ currentAge, currentAgeIdx, setCurrentAgeIdx }) {
       {showSettings && (
         <SettingsSheet
           onClose={() => setShowSettings(false)}
-          currentAgeIdx={currentAgeIdx}
-          setCurrentAgeIdx={setCurrentAgeIdx}
+          sophieDob={sophieDob}
+          setSophieDob={setSophieDob}
           onResetPreferences={resetPreferences}
         />
       )}
@@ -710,12 +740,99 @@ function ActionTab({ currentAge, currentAgeIdx, setCurrentAgeIdx }) {
   );
 }
 
+// ─── Cloud sync helpers ────────────────────────────────────────────────────
+
+const SYNC_EXCLUDE = new Set(['sophie.gemini.key', 'sophie.github.token']);
+
+function readSyncableLocalStorage() {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith('sophie.') || SYNC_EXCLUDE.has(key)) continue;
+    data[key] = localStorage.getItem(key);
+  }
+  return data;
+}
+
+function applySyncedLocalStorage(data) {
+  for (const [key, value] of Object.entries(data)) {
+    if (SYNC_EXCLUDE.has(key)) continue;
+    try { localStorage.setItem(key, value); } catch {}
+  }
+}
+
+async function pushToGist(token, gistId) {
+  const content = JSON.stringify(readSyncableLocalStorage(), null, 2);
+  const body = {
+    description: 'Sophie Roadmap — settings backup',
+    public: false,
+    files: { 'sophie-roadmap.json': { content } },
+  };
+  const res = await fetch(
+    gistId ? `https://api.github.com/gists/${gistId}` : 'https://api.github.com/gists',
+    {
+      method: gistId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(body),
+    }
+  );
+  if (!res.ok) { const d = await res.json(); throw new Error(d.message || `HTTP ${res.status}`); }
+  const d = await res.json();
+  return d.id;
+}
+
+async function pullFromGist(gistId) {
+  const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+    headers: { 'Accept': 'application/vnd.github+json' },
+  });
+  if (!res.ok) { const d = await res.json(); throw new Error(d.message || `HTTP ${res.status}`); }
+  const d = await res.json();
+  const content = d.files?.['sophie-roadmap.json']?.content;
+  if (!content) throw new Error('No sophie-roadmap.json file found in gist');
+  applySyncedLocalStorage(JSON.parse(content));
+}
+
 // ─── SettingsSheet ─────────────────────────────────────────────────────────
 
-function SettingsSheet({ onClose, currentAgeIdx, setCurrentAgeIdx, onResetPreferences }) {
+function SettingsSheet({ onClose, sophieDob, setSophieDob, onResetPreferences }) {
   const [geminiKey, setGeminiKey] = useLocalStorageState('sophie.gemini.key', '');
+  const [githubToken, setGithubToken] = useLocalStorageState('sophie.github.token', '');
+  const [gistId, setGistId] = useLocalStorageState('sophie.github.gistId', '');
   const [resetDone, setResetDone] = useState(false);
-  const ages = window.ROADMAP_DATA || [];
+  const [pushStatus, setPushStatus] = useState('idle'); // idle|busy|done|error
+  const [pullStatus, setPullStatus] = useState('idle');
+  const [syncError, setSyncError] = useState('');
+  const dobAge = sophieDob ? calcAgeFromDob(sophieDob) : null;
+  const syncing = pushStatus === 'busy' || pullStatus === 'busy';
+
+  async function handlePush() {
+    setPushStatus('busy');
+    setSyncError('');
+    try {
+      const newId = await pushToGist(githubToken, gistId);
+      if (newId && newId !== gistId) setGistId(newId);
+      setPushStatus('done');
+      setTimeout(() => setPushStatus('idle'), 3000);
+    } catch (err) {
+      setSyncError(err.message || 'Failed to save');
+      setPushStatus('error');
+      setTimeout(() => setPushStatus('idle'), 5000);
+    }
+  }
+
+  async function handlePull() {
+    setPullStatus('busy');
+    setSyncError('');
+    try {
+      await pullFromGist(gistId);
+      setPullStatus('done');
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err) {
+      setSyncError(err.message || 'Failed to retrieve');
+      setPullStatus('error');
+      setTimeout(() => setPullStatus('idle'), 5000);
+    }
+  }
 
   return (
     <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label="Settings">
@@ -730,34 +847,84 @@ function SettingsSheet({ onClose, currentAgeIdx, setCurrentAgeIdx, onResetPrefer
           </button>
         </div>
         <div className="sheet__body">
+
           <div className="sheet__section">
-            <span className="sheet__label">Sophie's current age</span>
-            <div className="sheet__age-grid">
-              {ages.map((a, i) => (
-                <button
-                  key={a.age}
-                  className={`sheet__age-btn ${i === currentAgeIdx ? 'is-active' : ''}`}
-                  onClick={() => setCurrentAgeIdx(i)}
-                >{a.age}</button>
-              ))}
-            </div>
+            <label className="sheet__label" htmlFor="dob-input">Sophie's date of birth</label>
+            <input
+              id="dob-input"
+              type="date"
+              className="sheet__input"
+              value={sophieDob}
+              onChange={e => setSophieDob(e.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
+            />
+            {dobAge && (
+              <p style={{ fontSize: '13px', color: 'var(--teal)', marginTop: '6px' }}>
+                Sophie is {dobAge.years}y {dobAge.months}m {dobAge.days}d old
+              </p>
+            )}
           </div>
 
           <div className="sheet__section">
             <label className="sheet__label" htmlFor="gemini-key-input">Gemini API key</label>
             <input
               id="gemini-key-input"
-              type="password"
+              type="text"
               className="sheet__input"
               value={geminiKey}
-              onChange={e => setGeminiKey(e.target.value)}
+              onChange={e => setGeminiKey(e.target.value.trim())}
               placeholder="AIza…"
               autoComplete="off"
               spellCheck="false"
             />
+          </div>
+
+          <div className="sheet__section">
+            <span className="sheet__label">Cloud sync — GitHub Gist</span>
+            <label className="sheet__label" style={{ marginTop: '12px' }} htmlFor="github-token-input">GitHub personal access token</label>
+            <input
+              id="github-token-input"
+              type="text"
+              className="sheet__input"
+              value={githubToken}
+              onChange={e => setGithubToken(e.target.value.trim())}
+              placeholder="ghp_…"
+              autoComplete="off"
+              spellCheck="false"
+            />
+            <label className="sheet__label" style={{ marginTop: '10px' }} htmlFor="gist-id-input">Gist ID</label>
+            <input
+              id="gist-id-input"
+              type="text"
+              className="sheet__input"
+              value={gistId}
+              onChange={e => setGistId(e.target.value.trim())}
+              placeholder="Leave blank to create on first save"
+              autoComplete="off"
+              spellCheck="false"
+            />
             <p className="sheet__warning">
-              ⚠️ Your key is stored on this device only. Anyone with access to this device can see it. Do not share this device.
+              Token needs the <strong>gist</strong> scope. Gemini key and GitHub token are never synced.
             </p>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+              <button
+                className="sheet__sync-btn"
+                onClick={handlePush}
+                disabled={!githubToken || syncing}
+              >
+                {pushStatus === 'busy' ? 'Saving…' : pushStatus === 'done' ? 'Saved ✓' : 'Store in Cloud'}
+              </button>
+              <button
+                className="sheet__sync-btn"
+                onClick={handlePull}
+                disabled={!gistId || syncing}
+              >
+                {pullStatus === 'busy' ? 'Retrieving…' : pullStatus === 'done' ? 'Reloading…' : 'Retrieve from Cloud'}
+              </button>
+            </div>
+            {(pushStatus === 'error' || pullStatus === 'error') && syncError && (
+              <p style={{ fontSize: '13px', color: 'var(--warm-red)', marginTop: '8px' }}>{syncError}</p>
+            )}
           </div>
 
           <div className="sheet__section">
@@ -768,6 +935,7 @@ function SettingsSheet({ onClose, currentAgeIdx, setCurrentAgeIdx, onResetPrefer
               {resetDone ? 'Preferences reset ✓' : 'Reset action preferences'}
             </button>
           </div>
+
         </div>
       </div>
     </div>
@@ -862,7 +1030,13 @@ function BrowseActions({ currentAge, categories, onClose, doneMap, ratingsMap, o
 // ─── GeminiPromptModal ─────────────────────────────────────────────────────
 
 function GeminiPromptModal({ item, categories, onClose, onOpenSettings }) {
-  const geminiKey = (() => { try { return localStorage.getItem('sophie.gemini.key') || ''; } catch { return ''; } })();
+  const geminiKey = (() => {
+    try {
+      const raw = localStorage.getItem('sophie.gemini.key');
+      if (!raw) return '';
+      try { return JSON.parse(raw).trim(); } catch { return raw.trim(); }
+    } catch { return ''; }
+  })();
   const [status, setStatus] = useState('idle');
   const [results, setResults] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
@@ -880,10 +1054,10 @@ function GeminiPromptModal({ item, categories, onClose, onOpenSettings }) {
     const prompt = `You are helping a parent of a bilingual 3.5-year-old (English + Bulgarian, Bulgarian-only schooling, English-dominant accent: RP). The parent just used this activity with their daughter:\n\nTitle: ${item.title}\nHook: ${item.hook}\nCategory: ${cat ? cat.label : item.category}\nSkill focus: ${(item.skillTags || []).join(', ')}\n\nSuggest 3 NEW activities in the same category that go deeper or vary the approach, all focused on advancing English fluency or literacy. Use British English spellings.\n\nRespond in JSON only:\n[\n  { "title": "...", "hook": "...", "body": "..." },\n  ...\n]`;
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-goog-api-key': geminiKey },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
         }
       );
@@ -948,6 +1122,7 @@ function GeminiPromptModal({ item, categories, onClose, onOpenSettings }) {
 // Export to window
 Object.assign(window, {
   useLocalStorageState,
+  calcAgeFromDob,
   AgeSection,
   AgeTabs,
   AgeHero,

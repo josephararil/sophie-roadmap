@@ -4,10 +4,24 @@ const { useState: useStateApp, useEffect: useEffectApp } = React;
 function App() {
   const data = window.ROADMAP_DATA;
   const [idx, setIdx] = window.useLocalStorageState('sophie.currentAge', 0);
+  const [sophieDob, setSophieDob] = window.useLocalStorageState('sophie.dob', '');
   const [welcomed, setWelcomed] = window.useLocalStorageState('sophie.welcomed', false);
   const [activeTab, setActiveTab] = window.useLocalStorageState('sophie.activeTab', 'action');
   const safeIdx = Math.max(0, Math.min(idx, data.length - 1));
   const age = data[safeIdx];
+
+  // Derive integer age from DOB for activity filtering; clamp to data range
+  const currentAgeYears = sophieDob
+    ? Math.min(Math.max(window.calcAgeFromDob(sophieDob).years, data[0].age), data[data.length - 1].age)
+    : age.age;
+
+  // Sync Roadmap tab to the correct age section when DOB changes
+  useEffectApp(() => {
+    if (!sophieDob) return;
+    const years = Math.min(Math.max(window.calcAgeFromDob(sophieDob).years, data[0].age), data[data.length - 1].age);
+    const newIdx = data.findIndex(d => d.age === years);
+    if (newIdx >= 0) setIdx(newIdx);
+  }, [sophieDob]);
 
   useEffectApp(() => {
     if (activeTab === 'roadmap') {
@@ -32,9 +46,9 @@ function App() {
       <main className="app-scroll">
         {activeTab === 'action' ? (
           <window.ActionTab
-            currentAge={age.age}
-            currentAgeIdx={safeIdx}
-            setCurrentAgeIdx={setIdx}
+            currentAge={currentAgeYears}
+            sophieDob={sophieDob}
+            setSophieDob={setSophieDob}
           />
         ) : (
           <window.AgeSection age={age} key={age.age} />
