@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Rounded square background in app's dark teal -->
+  <rect width="512" height="512" rx="100" fill="#004D40"/>
+  <!-- Heart/leaf icon matching the topbar brand mark, scaled and centred -->
+  <svg x="96" y="96" width="320" height="320" viewBox="0 0 24 24">
+    <path
+      d="M12 21s-7-4.5-7-11a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 6.5-7 11-7 11z"
+      fill="none"
+      stroke="#E0F2F1"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+</svg>
