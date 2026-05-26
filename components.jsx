@@ -338,10 +338,6 @@ function getTodayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function daysSince(iso) {
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-}
-
 function calcAgeFromDob(dobStr) {
   const dob = new Date(dobStr);
   const now = new Date();
@@ -393,18 +389,17 @@ function weightedPick(pool, scores, rng) {
   return pool[pool.length - 1];
 }
 
-function pickCard(items, currentAge, checkedMilestones, ratings, doneMap, seedStr, excludeIds = []) {
+function pickCard(items, currentAge, checkedMilestones, ratings, seedStr, excludeIds = []) {
   const lc = checkedMilestones.map(m => m.toLowerCase());
 
   let pool = items.filter(it =>
     it.ages.includes(currentAge) &&
     !excludeIds.includes(it.id) &&
-    !(doneMap[it.id] && daysSince(doneMap[it.id]) < 14) &&
     ratings[it.id] !== -1
   );
   if (!pool.length) {
     pool = items.filter(it =>
-      it.ages.includes(currentAge) && !excludeIds.includes(it.id) && ratings[it.id] !== -1
+      it.ages.includes(currentAge) && !excludeIds.includes(it.id)
     );
   }
   if (!pool.length) return null;
@@ -440,16 +435,6 @@ function getCheckedMilestoneTexts() {
     } catch {}
   }
   return texts;
-}
-
-function readDoneMap() {
-  const map = {};
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key || !key.startsWith('sophie.action.done.')) continue;
-    map[key.replace('sophie.action.done.', '')] = localStorage.getItem(key);
-  }
-  return map;
 }
 
 function readRatingsMap() {
@@ -512,15 +497,14 @@ function BottomTabBar({ active, onChange }) {
 
 // ─── ActionCard ────────────────────────────────────────────────────────────
 
-function ActionCard({ item, variant, categories, doneMap, ratingsMap, onTriedIt, onRate, onNext, onGemini, aiSuggested }) {
+function ActionCard({ item, variant, categories, ratingsMap, onTriedIt, onRate, onGemini, aiSuggested }) {
   const [expanded, setExpanded] = useState(variant === 'hero');
   const cat = (categories || []).find(c => c.id === item.category) || { label: item.category, icon: '●' };
   const cs = CAT_STYLES[item.category] || { bg: 'var(--light-teal)', fg: 'var(--dark-teal)' };
-  const isDone = !!doneMap[item.id];
   const rating = ratingsMap[item.id];
 
   return (
-    <div className={`ac ac--${variant}${isDone ? ' ac--done' : ''}`}>
+    <div className={`ac ac--${variant}`}>
       {aiSuggested && <div className="ac__ai-badge">✨ AI suggested</div>}
       <div className="ac__badge" style={{ background: cs.bg, color: cs.fg }}>
         {cat.icon} {cat.label}
@@ -596,7 +580,7 @@ function ActionCard({ item, variant, categories, doneMap, ratingsMap, onTriedIt,
 
       <div className="ac__actions">
         <button
-          className={`ac__act-btn ac__act-btn--tried${isDone ? ' is-on' : ''}`}
+          className="ac__act-btn ac__act-btn--tried"
           onClick={() => onTriedIt(item.id)}
         >✓ Tried it</button>
         <button
@@ -609,7 +593,6 @@ function ActionCard({ item, variant, categories, doneMap, ratingsMap, onTriedIt,
           onClick={() => onRate(item.id, -1)}
           aria-label="Dislike this activity"
         >👎</button>
-        <button className="ac__act-btn" onClick={onNext}>Next</button>
         <button className="ac__act-btn ac__act-btn--gemini" onClick={() => onGemini(item)}>Ask Gemini →</button>
       </div>
     </div>
@@ -625,7 +608,6 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
 
   const today = getTodayStr();
   const [dailyOffset, setDailyOffset] = useLocalStorageState(`sophie.action.dailyOffset.${today}`, 0);
-  const [doneMap, setDoneMap] = useState(readDoneMap);
   const [ratingsMap, setRatingsMap] = useState(readRatingsMap);
 
   const actionsData = window.ACTIONS_DATA || { items: [], categories: [] };
@@ -641,21 +623,19 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
   const checkedMilestones = getCheckedMilestoneTexts();
   const seedStr = today + String(dailyOffset);
 
-  const heroCard = pickCard(allItems, currentAge, checkedMilestones, ratingsMap, doneMap, seedStr);
+  const heroCard = pickCard(allItems, currentAge, checkedMilestones, ratingsMap, seedStr);
 
   const secondaryCards = (() => {
     if (!heroCard) return [];
     const nonHeroCats = categories.filter(c => c.id !== heroCard.category).slice(0, 3);
     return nonHeroCats.map(cat => {
       const catItems = allItems.filter(it => it.category === cat.id);
-      return pickCard(catItems, currentAge, checkedMilestones, ratingsMap, doneMap, seedStr + cat.id, [heroCard.id]);
+      return pickCard(catItems, currentAge, checkedMilestones, ratingsMap, seedStr + cat.id, [heroCard.id]);
     }).filter(Boolean);
   })();
 
-  function markTriedIt(id) {
-    const iso = new Date().toISOString();
-    try { localStorage.setItem(`sophie.action.done.${id}`, iso); } catch {}
-    setDoneMap(prev => ({ ...prev, [id]: iso }));
+  function markTriedIt() {
+    setDailyOffset(o => o + 1);
   }
 
   function setRating(id, value) {
@@ -666,6 +646,7 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
     } else {
       try { localStorage.setItem(`sophie.action.rating.${id}`, JSON.stringify(value)); } catch {}
       setRatingsMap(prev => ({ ...prev, [id]: value }));
+      if (value === -1) setDailyOffset(o => o + 1);
     }
   }
 
@@ -676,7 +657,6 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
       if (k && k.startsWith('sophie.action.')) keys.push(k);
     }
     keys.forEach(k => localStorage.removeItem(k));
-    setDoneMap({});
     setRatingsMap({});
   }
 
@@ -690,11 +670,9 @@ function ActionTab({ currentAge, sophieDob, setSophieDob }) {
 
   const sharedCardProps = {
     categories,
-    doneMap,
     ratingsMap,
     onTriedIt: markTriedIt,
     onRate: setRating,
-    onNext: () => setDailyOffset(o => o + 1),
     onGemini: setGeminiItem,
   };
 
@@ -962,9 +940,11 @@ function SettingsSheet({ onClose, sophieDob, setSophieDob, onResetPreferences })
 
 // ─── BrowseActions ─────────────────────────────────────────────────────────
 
-function BrowseActions({ currentAge, categories, items: propItems, onClose, doneMap, ratingsMap, onTriedIt, onRate, onNext, onGemini }) {
+function BrowseActions({ currentAge, categories, items: propItems, onClose, ratingsMap, onTriedIt, onRate, onGemini }) {
   const [selectedItem, setSelectedItem] = useState(null);
+  const [collapsed, setCollapsed] = useState({});
   const items = propItems || (window.ACTIONS_DATA || { items: [] }).items;
+  function toggleCat(catId) { setCollapsed(prev => ({ ...prev, [catId]: !prev[catId] })); }
 
   const byCategory = categories.map(cat => ({
     cat,
@@ -998,11 +978,9 @@ function BrowseActions({ currentAge, categories, items: propItems, onClose, done
               item={selectedItem}
               variant="hero"
               categories={categories}
-              doneMap={doneMap}
               ratingsMap={ratingsMap}
               onTriedIt={onTriedIt}
               onRate={onRate}
-              onNext={onNext}
               onGemini={onGemini}
             />
           </div>
@@ -1025,17 +1003,34 @@ function BrowseActions({ currentAge, categories, items: propItems, onClose, done
           )}
           {byCategory.map(({ cat, catItems }) => {
             const cs = CAT_STYLES[cat.id] || { bg: 'var(--light-teal)', fg: 'var(--dark-teal)' };
+            const isCollapsed = !!collapsed[cat.id];
             return (
               <div key={cat.id} className="browse__section">
-                <div className="browse__cat-head" style={{ background: cs.bg, color: cs.fg }}>
-                  {cat.icon} {cat.label}
-                </div>
-                {catItems.map(it => (
-                  <button key={it.id} className="browse__item" onClick={() => setSelectedItem(it)}>
-                    <div className="browse__item-title">{it._geminiSaved && <span style={{ fontSize: '12px', marginRight: '4px' }}>✨</span>}{it.title}</div>
-                    <div className="browse__item-hook">{it.hook}</div>
-                  </button>
-                ))}
+                <button
+                  type="button"
+                  className="browse__cat-head"
+                  style={{ background: cs.bg, color: cs.fg, width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                  onClick={() => toggleCat(cat.id)}
+                >
+                  <span>{cat.icon} {cat.label}</span>
+                  <svg style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                {!isCollapsed && catItems.map(it => {
+                  const rating = ratingsMap[it.id];
+                  return (
+                    <button key={it.id} className="browse__item" onClick={() => setSelectedItem(it)}>
+                      <div className="browse__item-title">
+                        {it._geminiSaved && <span style={{ fontSize: '12px', marginRight: '4px' }}>✨</span>}
+                        {it.title}
+                        {rating === 1 && <span style={{ marginLeft: '6px', fontSize: '14px' }}>👍</span>}
+                        {rating === -1 && <span style={{ marginLeft: '6px', fontSize: '14px' }}>👎</span>}
+                      </div>
+                      <div className="browse__item-hook">{it.hook}</div>
+                    </button>
+                  );
+                })}
               </div>
             );
           })}
