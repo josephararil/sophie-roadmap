@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A static single-page React app — a developmental roadmap guide for children ages 2–11, built for a parent/caregiver audience. No build tooling: React and Babel are loaded via CDN (unpkg), so the project runs directly as-is. The app is also a PWA: installable and fully offline-capable via a service worker.
+A static two-tab React PWA — a developmental roadmap guide and daily activity companion for Sophie (bilingual English/Bulgarian child, ages 2–11), built for a parent/caregiver audience. No build tooling: React and Babel are loaded via CDN (unpkg), so the project runs directly as-is. Fully installable and offline-capable via a service worker.
 
 ## Running the App
 
@@ -24,24 +24,34 @@ No package manager, no `npm install`, no compilation needed.
 
 ## Architecture
 
-Six files make up the entire app:
+Seven files make up the entire app:
 
 | File | Purpose |
 |---|---|
-| `index.html` | Entry point; embeds all CSS (~930 lines), loads CDN scripts, registers service worker |
+| `index.html` | Entry point; embeds all CSS (~1 500 lines), loads CDN scripts, registers service worker |
 | `data.js` | Exports `window.ROADMAP_DATA` — array of 10 age objects (ages 2–11). **Fully self-documenting** — read the schema block at the top before editing. |
-| `app.jsx` | Root `App` component, `TopBar`, `WelcomeOverlay`; manages current-age state via localStorage |
-| `components.jsx` | All reusable UI components |
+| `actions.js` | Exports `window.ACTIONS_DATA` — catalogue of bite-sized daily activities. **Fully self-documenting** — read the schema block at the top before editing. Do NOT modify item `id` values (used as localStorage keys). |
+| `app.jsx` | Root `App` component, `TopBar`, `WelcomeOverlay`; manages active-tab state and current-age state via localStorage |
+| `components.jsx` | All reusable UI components — Roadmap tab components + all Action tab components |
 | `sw.js` | Service worker — cache-first strategy, pre-caches all local assets on install |
 | `manifest.json` | PWA manifest — app name, theme colours, icon references |
 
-**Data flow:** `data.js` → `app.jsx` reads `window.ROADMAP_DATA` → passes age objects down to components in `components.jsx`.
+**Data flow:**
+- `data.js` → `app.jsx` reads `window.ROADMAP_DATA` → passes age objects to Roadmap tab components
+- `actions.js` → `ActionTab` reads `window.ACTIONS_DATA` → selection algorithm picks cards
 
-**State persistence:** A custom `useLocalStorageState` hook (in `components.jsx`) persists checked habits and milestones per age under the key `sophie.currentAge` (and per-item keys).
+**State persistence:** A custom `useLocalStorageState` hook (in `components.jsx`) is used throughout. See the full localStorage key inventory below.
 
-### Data shape
+## Two-Tab Structure
 
-Each age object in `ROADMAP_DATA` (full schema documented inside `data.js`):
+The app renders a bottom tab bar (`BottomTabBar`) that switches between:
+
+- **Today tab** (`activeTab === 'action'`, default) — daily activity companion; one hero card + 3 secondary cards chosen by the selection algorithm; settings sheet, browse list, and Gemini integration
+- **Roadmap tab** (`activeTab === 'roadmap'`) — long-term reference; age tabs, milestones, habits, monthly plans, red flags — the original app, unchanged
+
+### Data shapes
+
+**`ROADMAP_DATA`** — each age object (full schema in `data.js`):
 ```js
 {
   age, months, part, partNumber, image,
@@ -53,33 +63,78 @@ Each age object in `ROADMAP_DATA` (full schema documented inside `data.js`):
 }
 ```
 
-`data.js` is intentionally self-contained and self-documenting so it can be handed to any LLM for content generation without providing any other project context. The top of the file contains a full schema block and Sophie's context (bilingual English/Bulgarian child, Bulgarian-only schooling, English literacy goals).
+**`ACTIONS_DATA`** — top-level shape (full schema in `actions.js`):
+```js
+{
+  categories: [{ id, label, icon, blurb }],
+  items: [ActionItem]
+}
+```
+
+Each `ActionItem` has: `id`, `category`, `ages`, `title`, `hook`, `body`, `examples`, `lyrics`, `duration`, `where`, `skillTags`, `milestoneRefs`, `literacyWeight`, `followUp`, `relatedIds`, and category-specific optional fields (`author`, `whyThisBook`, `discussionPrompts`, `dialogue`). See the full schema in `actions.js`.
+
+Both data files are intentionally self-contained and self-documenting so they can be handed to an LLM for content generation without any other project context.
 
 ### Key components (components.jsx)
 
+**Roadmap tab:**
 - `AgeSection` — full page for one age; composes all sub-components
 - `MilestoneTracker` — interactive checklist with SVG progress ring
 - `QuickStartCard` — accordion guide (habits, activities, communication)
 - `AgeTabs` — horizontal scrolling age selector
-- `AlertBox` — red flags section (rendered when `age.redFlags` is non-null)
+- `AlertBox` — red flags section
+
+**Action tab:**
+- `ActionTab` — main view; greeting strip, hero + secondary cards, browse link; manages done/rating/dailyOffset state
+- `ActionCard` — renders one item in `hero` (full body/lyrics/dialogue/prompts) or `compact` (tap-to-expand) variant; action row: Tried it / 👍 / 👎 / Next / Ask Gemini
+- `BottomTabBar` — two-segment fixed-bottom nav
+- `SettingsSheet` — age selector, Gemini key input, reset preferences
+- `BrowseActions` — categorised list of all age-matched items; tap to open as hero card
+- `GeminiPromptModal` — direct browser → Gemini Flash API call; renders 3 AI-suggested result cards
+
+**Selection algorithm** (in `components.jsx`, `pickCard` function):
+- Deterministic: same date + same state = same card (seeded RNG from `YYYY-MM-DD + dailyOffset + currentAge`)
+- Scores items: `1 + literacyWeight × 1.5`, then `+3` per unchecked `milestoneRef` (gap targeting) or `-1` if already checked, then `+2` for 👍-rated items
+- Filters: excludes 👎-rated items, items "Tried it" within 14 days, and `excludeIds`
+- Secondary cards: one item from each of the first 3 non-hero categories in declaration order
+
+Checked milestones are read directly from existing Roadmap localStorage keys (`sophie.milestones.*`) — no state hoisting needed.
+
+## localStorage Keys
+
+| Key | Type | Purpose |
+|---|---|---|
+| `sophie.currentAge` | number (index) | Selected age tab index in the Roadmap |
+| `sophie.welcomed` | boolean | Whether the welcome overlay has been dismissed |
+| `sophie.activeTab` | `'action'` \| `'roadmap'` | Last-used tab (defaults to `'action'`) |
+| `sophie.habits.<ageKey>` | `{[i]: bool}` | Checked habits per age |
+| `sophie.milestones.<ageKey>` | `{[i]: bool}` | Checked milestones per age |
+| `sophie.action.done.<id>` | ISO timestamp | "Tried it" timestamp (14-day cooldown) |
+| `sophie.action.rating.<id>` | `1` \| `-1` | 👍 / 👎 rating |
+| `sophie.action.dailyOffset.<YYYY-MM-DD>` | number | "Next suggestion" counter per day |
+| `sophie.gemini.key` | string | User-provided Gemini API key (on-device only) |
 
 ## PWA / Service Worker
 
-- **Pre-cached on install:** all local files (`index.html`, `app.jsx`, `components.jsx`, `data.js`, `manifest.json`, `icon.svg`, all `assets/*.png`)
-- **Lazily cached on first fetch:** CDN scripts (React, Babel) and Google Fonts — cached on first network access, served from cache on subsequent visits and offline
-- **Cache version:** defined at the top of `sw.js` as `CACHE_VERSION = 'v1'`
+- **Pre-cached on install:** all local files (`index.html`, `app.jsx`, `components.jsx`, `data.js`, `actions.js`, `manifest.json`, `icon.svg`, all `assets/*.png`)
+- **Lazily cached on first fetch:** CDN scripts (React, Babel) and Google Fonts
+- **Cache version:** `CACHE_VERSION = 'v2'` at the top of `sw.js`
 
-**When to bump the cache version:** Any time you update `data.js`, `app.jsx`, `components.jsx`, or any asset file, increment `CACHE_VERSION` in `sw.js` (e.g., `'v2'`). This causes the service worker to activate a new cache and delete the old one, ensuring users get the updated content.
+**When to bump the cache version:** Any time you update `data.js`, `actions.js`, `app.jsx`, `components.jsx`, or any asset file, increment `CACHE_VERSION` in `sw.js`. This forces the service worker to activate a new cache and delete the old one.
 
 ```js
 // sw.js, line 1
-const CACHE_VERSION = 'v2';  // bump this on every content update
+const CACHE_VERSION = 'v2';  // bump on every content update
 ```
 
 ## Styling
 
-All CSS lives in `<style>` tags inside `index.html`. Design tokens are defined as CSS custom properties at `:root` (13 variables for colors, fonts, spacing, radius). Fonts: Merriweather (serif) + Inter (sans) via Google Fonts. The app container is max-width 480px (mobile-first).
+All CSS lives in `<style>` tags inside `index.html`. Design tokens are defined as CSS custom properties at `:root` (13 variables for colours, fonts, spacing, radius). **Do not add new tokens to `:root`** — use the existing variables. Fonts: Merriweather (serif) + Inter (sans) via Google Fonts. The app container is max-width 480px (mobile-first).
+
+## Gemini Integration
+
+The Action tab supports optional AI-generated activity suggestions via the Gemini Flash API. The call is made directly from the browser using a key the user pastes into the Settings sheet. The key is stored in localStorage under `sophie.gemini.key` and never leaves the device. If no key is set, the "Ask Gemini" button opens the Settings sheet instead. All Gemini results are ephemeral — never persisted to `ACTIONS_DATA`.
 
 ## No Linting or Tests
 
-There is no test framework, no linter, and no TypeScript. Babel (standalone) transpiles JSX in the browser at runtime.
+There is no test framework, no linter, and no TypeScript. Babel (standalone) transpiles JSX in the browser at runtime. British English spellings throughout (colour, recognise, favourite).
